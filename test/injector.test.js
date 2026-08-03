@@ -40,3 +40,39 @@ test('delivers one JSON line without shell or bridge token', async () => {
   assert.equal(JSON.parse(input).deliveryId, 'delivery-001');
   assert.ok(input.endsWith('\n'));
 });
+
+test('webhook mode requires a matching delivery acknowledgement', async () => {
+  let request;
+  const envelope = {
+    protocol: 'xinchao-runtime-wake/1',
+    deliveryId: 'delivery-webhook-001',
+    reason: 'dream_residue',
+    message: '醒来后还有一小片海留在身上。',
+  };
+  await deliverToInjector(envelope, {
+    injector: {
+      mode: 'webhook',
+      webhookUrl: new URL('https://runtime.example/xinchao/wake'),
+      webhookToken: 'webhook-token-with-enough-entropy',
+    },
+    timeouts: { injectMs: 1000 },
+  }, {
+    fetchImpl: async (url, options) => {
+      request = { url, options };
+      return new Response(JSON.stringify({ accepted: true, deliveryId: envelope.deliveryId }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+  assert.equal(request.url.href, 'https://runtime.example/xinchao/wake');
+  assert.equal(request.options.headers.Authorization, 'Bearer webhook-token-with-enough-entropy');
+  assert.equal(JSON.parse(request.options.body).message, envelope.message);
+
+  await assert.rejects(() => deliverToInjector(envelope, {
+    injector: { mode: 'webhook', webhookUrl: new URL('https://runtime.example/xinchao/wake'), webhookToken: null },
+    timeouts: { injectMs: 1000 },
+  }, {
+    fetchImpl: async () => new Response(JSON.stringify({ accepted: true, deliveryId: 'wrong' }), { status: 200 }),
+  }), /matching deliveryId/);
+});

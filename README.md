@@ -2,7 +2,7 @@
 
 心潮 Runtime Bridge 是一个独立、可审计的本地连接工具。它把心潮平台已经到期的定时互动交给用户自己的 AI Runtime Adapter，不属于心潮网页，也不管理用户的 AI 会话。
 
-> 当前为 `0.1.0` 基础实现。客户端协议、SSE、Injector 和 ACK 已具备；需要心潮多人平台实现本文约定的 `/bridge/v1/*` 服务端接口后才能端到端使用。
+> 当前为 `0.2.0` 首个公开候选版。客户端协议、SSE、进程/Webhook Injector 和严格 ACK 已具备；需要心潮平台实现本文约定的 `/bridge/v1/*` 服务端接口后才能端到端使用。
 
 ## 它解决什么
 
@@ -16,7 +16,7 @@
 
 它不会声称能唤醒一个没有后台接口的官方关闭窗口：
 
-- 自建前端、本地 Agent、用户控制的 app-server：可以由 Adapter 后台接收；
+- 自建前端、本地 Agent、用户控制的 app-server：可以由进程 Adapter 或 HTTPS Webhook 后台接收；
 - 活跃的官方窗口：可在平台允许的会话边界投递；
 - 已关闭且没有 Hook 的官方窗口：平台保留 `waiting_for_ai`，下次连接时补投；
 - UI 是否实时显示与 Runtime 是否接受是两个独立验收项。
@@ -33,25 +33,35 @@
 - 日志只记录 delivery ID、reason 和结果，不记录正文；
 - 同一 Bridge 串行投递；一次本地投递最多尝试两次；
 - Runtime Adapter 必须按 `deliveryId` 幂等，防止“已注入但 ACK 丢失”导致重复；
-- Adapter 必须确认正确会话已接受消息，不能只以进程成功启动作为 ACK。
+- Adapter 必须确认正确会话已接受消息，不能只以进程成功启动或 Webhook 返回 200 作为 ACK。
 
 ## 环境要求
 
 - Node.js 20 或更高版本；
 - 心潮平台签发的机器 Token；
-- 用户自己提供的 Runtime Adapter 可执行入口。
+- 用户自己的 Runtime Adapter 可执行入口，或者支持严格 ACK 的 HTTPS Webhook。
+
+## 三个平台都能用
+
+只需要安装 Node.js 20+，其余命令一致：
+
+- macOS：Terminal；
+- Windows：PowerShell / Windows Terminal；
+- Linux / VPS：任意 shell，也可交给 systemd、Docker 或进程守护器。
+
+从 GitHub 下载源码后：
 
 ```bash
+git clone https://github.com/tianyupaipai-cmd/xinchao-runtime-bridge.git
+cd xinchao-runtime-bridge
+npm install
 cp .env.example .env
-set -a
-source .env
-set +a
-
-node src/cli.js check
-node src/cli.js run
+npm test
+node --env-file=.env src/cli.js check
+node --env-file=.env src/cli.js run
 ```
 
-本工具不会自动读取 `.env`。上面的命令只是 shell 示例；生产环境请使用系统密钥管理或受保护的服务环境。
+`node --env-file=.env` 在 macOS、Windows 和 Linux 上写法一致。本工具不会把 `.env` 纳入 Git；生产环境仍建议使用系统密钥管理或受保护的服务环境。
 
 ## 配置
 
@@ -59,9 +69,12 @@ node src/cli.js run
 | --- | --- |
 | `XINCHAO_BRIDGE_BASE_URL` | 心潮平台地址；非本机必须使用 HTTPS |
 | `XINCHAO_BRIDGE_MACHINE_TOKEN` | 当前机器的专用 Token，至少 24 字符 |
+| `XINCHAO_BRIDGE_INJECTOR_MODE` | `process`（默认）或 `webhook` |
 | `XINCHAO_BRIDGE_INJECTOR_EXECUTABLE` | `run` 所需的 Adapter 可执行程序 |
 | `XINCHAO_BRIDGE_INJECTOR_ARGS_JSON` | 参数字符串数组，不解析 shell 命令 |
 | `XINCHAO_BRIDGE_INJECTOR_WORKING_DIRECTORY` | 可选的绝对工作目录 |
+| `XINCHAO_BRIDGE_WEBHOOK_URL` | Webhook 模式的 HTTPS 接收地址 |
+| `XINCHAO_BRIDGE_WEBHOOK_TOKEN` | 可选的独立 Webhook Bearer；不得复用机器 Token |
 | `XINCHAO_BRIDGE_LOG_LEVEL` | `debug`、`info`、`warn` 或 `error` |
 | `XINCHAO_BRIDGE_CONNECT_TIMEOUT_MS` | 建连超时，默认 15000 |
 | `XINCHAO_BRIDGE_INJECT_TIMEOUT_MS` | 单次 Injector 超时，默认 30000 |
@@ -87,6 +100,24 @@ Adapter 应当：
 4. 按 `deliveryId` 保证幂等；
 5. Runtime 接受正确会话后返回退出码 `0`；
 6. 临时失败返回非零退出码并在 stderr 写简短、无敏感信息的原因。
+
+## Webhook 模式
+
+自建前端的后端、手机服务或远端 Agent 可以直接接收 HTTPS POST。Bridge 会发送同一个信封，并附带：
+
+```text
+X-Xinchao-Protocol: xinchao-runtime-wake/1
+X-Xinchao-Delivery-Id: 01J...
+Authorization: Bearer <独立 Webhook Token>   # 配置时才发送
+```
+
+接收端只有在正确会话已经接受消息后，才返回：
+
+```json
+{"accepted":true,"deliveryId":"01J..."}
+```
+
+仅返回 HTTP 200、返回错误的 `deliveryId` 或缺少 `accepted: true`，都会被视为未交付；心潮不会把内容提前标记完成。
 
 ## 平台服务端契约
 

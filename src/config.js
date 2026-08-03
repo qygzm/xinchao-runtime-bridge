@@ -1,6 +1,7 @@
 import { isAbsolute } from 'node:path';
 
 const LEVELS = new Set(['debug', 'info', 'warn', 'error']);
+const INJECTOR_MODES = new Set(['process', 'webhook']);
 
 function required(env, key) {
   const value = String(env[key] ?? '').trim();
@@ -50,14 +51,40 @@ function parseBaseUrl(raw) {
   return value;
 }
 
+function parseWebhookUrl(raw) {
+  if (!raw) return null;
+  let value;
+  try {
+    value = new URL(raw);
+  } catch {
+    throw new Error('XINCHAO_BRIDGE_WEBHOOK_URL must be a valid URL');
+  }
+  if (value.username || value.password || value.hash) {
+    throw new Error('XINCHAO_BRIDGE_WEBHOOK_URL must not contain credentials or a fragment');
+  }
+  const local = value.hostname === '127.0.0.1' || value.hostname === 'localhost' || value.hostname === '::1';
+  if (value.protocol !== 'https:' && !(local && value.protocol === 'http:')) {
+    throw new Error('non-local XINCHAO_BRIDGE_WEBHOOK_URL must use HTTPS');
+  }
+  return value;
+}
+
 export function loadConfig(env = process.env, { requireInjector = true } = {}) {
   const baseUrl = parseBaseUrl(required(env, 'XINCHAO_BRIDGE_BASE_URL'));
   const machineToken = required(env, 'XINCHAO_BRIDGE_MACHINE_TOKEN');
   if (machineToken.length < 24) throw new Error('XINCHAO_BRIDGE_MACHINE_TOKEN is too short');
 
+  const injectorMode = String(env.XINCHAO_BRIDGE_INJECTOR_MODE ?? 'process').trim().toLowerCase();
+  if (!INJECTOR_MODES.has(injectorMode)) throw new Error('XINCHAO_BRIDGE_INJECTOR_MODE must be process or webhook');
   const executable = String(env.XINCHAO_BRIDGE_INJECTOR_EXECUTABLE ?? '').trim();
-  if (requireInjector && !executable) {
-    throw new Error('XINCHAO_BRIDGE_INJECTOR_EXECUTABLE is required for run');
+  const webhookUrl = parseWebhookUrl(String(env.XINCHAO_BRIDGE_WEBHOOK_URL ?? '').trim());
+  const webhookToken = String(env.XINCHAO_BRIDGE_WEBHOOK_TOKEN ?? '').trim() || null;
+  if (webhookToken && webhookToken.length < 24) throw new Error('XINCHAO_BRIDGE_WEBHOOK_TOKEN is too short');
+  if (requireInjector && injectorMode === 'process' && !executable) {
+    throw new Error('XINCHAO_BRIDGE_INJECTOR_EXECUTABLE is required for process mode');
+  }
+  if (requireInjector && injectorMode === 'webhook' && !webhookUrl) {
+    throw new Error('XINCHAO_BRIDGE_WEBHOOK_URL is required for webhook mode');
   }
   const workingDirectory = String(env.XINCHAO_BRIDGE_INJECTOR_WORKING_DIRECTORY ?? '').trim() || null;
   if (workingDirectory && !isAbsolute(workingDirectory)) {
@@ -70,9 +97,12 @@ export function loadConfig(env = process.env, { requireInjector = true } = {}) {
     baseUrl,
     machineToken,
     injector: Object.freeze({
+      mode: injectorMode,
       executable: executable || null,
       args: parseArgs(String(env.XINCHAO_BRIDGE_INJECTOR_ARGS_JSON ?? '')),
       workingDirectory,
+      webhookUrl,
+      webhookToken,
     }),
     logLevel,
     timeouts: Object.freeze({

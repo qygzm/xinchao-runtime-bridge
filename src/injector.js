@@ -9,12 +9,41 @@ export class InjectorError extends Error {
   }
 }
 
+async function deliverToWebhook(envelope, config, { signal, logger, fetchImpl = fetch } = {}) {
+  const timeoutSignal = AbortSignal.timeout(config.timeouts.injectMs);
+  const requestSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+  logger?.info('webhook delivery started', { deliveryId: envelope.deliveryId, reason: envelope.reason });
+  const response = await fetchImpl(config.injector.webhookUrl, {
+    method: 'POST',
+    redirect: 'manual',
+    signal: requestSignal,
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-Xinchao-Protocol': envelope.protocol,
+      'X-Xinchao-Delivery-Id': envelope.deliveryId,
+      ...(config.injector.webhookToken ? { Authorization: `Bearer ${config.injector.webhookToken}` } : {}),
+    },
+    body: JSON.stringify(envelope),
+  });
+  if (!response.ok) throw new InjectorError(`webhook rejected delivery with HTTP ${response.status}`);
+  const result = await response.json().catch(() => null);
+  if (result?.accepted !== true || result?.deliveryId !== envelope.deliveryId) {
+    throw new InjectorError('webhook did not confirm the matching deliveryId');
+  }
+  logger?.info('webhook delivery accepted', { deliveryId: envelope.deliveryId, reason: envelope.reason });
+}
+
 export async function deliverToInjector(
   envelope,
   config,
-  { signal, logger, spawnImpl = spawn } = {},
+  { signal, logger, spawnImpl = spawn, fetchImpl = fetch } = {},
 ) {
   signal?.throwIfAborted();
+  if (config.injector.mode === 'webhook') {
+    await deliverToWebhook(envelope, config, { signal, logger, fetchImpl });
+    return;
+  }
   const timeoutSignal = AbortSignal.timeout(config.timeouts.injectMs);
   const childSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
   const childEnv = { ...process.env };

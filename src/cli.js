@@ -6,7 +6,7 @@ import { loadConfig } from './config.js';
 import { createLogger, safeError } from './logger.js';
 import { runBridge } from './runner.js';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const HELP = `xinchao-bridge ${VERSION}
 
 Usage:
