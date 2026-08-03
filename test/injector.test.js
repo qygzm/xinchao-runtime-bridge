@@ -46,7 +46,7 @@ test('webhook mode requires a matching delivery acknowledgement', async () => {
   const envelope = {
     protocol: 'xinchao-runtime-wake/1',
     deliveryId: 'delivery-webhook-001',
-    reason: 'dream_residue',
+    reason: 'user_note',
     message: '醒来后还有一小片海留在身上。',
   };
   await deliverToInjector(envelope, {

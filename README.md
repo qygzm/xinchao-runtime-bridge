@@ -1,8 +1,14 @@
 # 心潮 Runtime Bridge
 
-心潮 Runtime Bridge 是一个独立、可审计的本地连接工具。它把心潮平台已经到期的定时互动交给用户自己的 AI Runtime Adapter，不属于心潮网页，也不管理用户的 AI 会话。
+心潮 Runtime Bridge 是一个独立、可审计的本地连接工具。它只把用户主动发出的互动、便签与预约交给用户自己的 AI Runtime Adapter，不属于心潮网页，也不管理用户的 AI 会话。
 
 > 当前为 `0.2.0` 首个公开候选版。客户端协议、SSE、进程/Webhook Injector 和严格 ACK 已具备；需要心潮平台实现本文约定的 `/bridge/v1/*` 服务端接口后才能端到端使用。
+
+> 前置要求：用户必须先部署并连接自己的心潮。Bridge 不提供心潮后端，也不代替心潮保存状态。
+
+## 只供用户互动
+
+Bridge V1 只接受三个原因：`user_interaction`、`user_note`、`scheduled_interaction`。梦境、余韵、思念、内部状态与 AI 自主行动不允许自动注入窗口；它们继续留在心潮里，只有用户主动回应或转成用户便签后才进入 Bridge。
 
 ## 它解决什么
 

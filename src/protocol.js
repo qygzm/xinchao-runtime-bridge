@@ -2,6 +2,11 @@ export const STREAM_PROTOCOL = 'xinchao-bridge-stream/1';
 export const RUNTIME_PROTOCOL = 'xinchao-runtime-wake/1';
 export const MAX_REASON_LENGTH = 128;
 export const MAX_MESSAGE_LENGTH = 4_096;
+export const USER_INTERACTION_REASONS = Object.freeze([
+  'user_interaction',
+  'user_note',
+  'scheduled_interaction',
+]);
 
 const DELIVERY_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{5,159}$/;
 
@@ -49,6 +54,9 @@ export function parseRuntimeEnvelope(value, expectedDeliveryId = null) {
     value.reason.length > MAX_REASON_LENGTH
   ) {
     throw new Error('invalid runtime reason');
+  }
+  if (!USER_INTERACTION_REASONS.includes(value.reason)) {
+    throw new Error('runtime bridge accepts user-originated interactions only');
   }
   if (
     typeof value.message !== 'string' ||

@@ -38,3 +38,12 @@ test('rejects mismatched delivery IDs and oversized messages', () => {
     message: 'a'.repeat(4097),
   }), /message/);
 });
+
+test('rejects autonomous AI content because the bridge is user-interaction only', () => {
+  assert.throws(() => parseRuntimeEnvelope({
+    protocol: 'xinchao-runtime-wake/1',
+    deliveryId: 'delivery-123',
+    reason: 'dream_residue',
+    message: 'This must remain in Xinchao until the user chooses to respond.',
+  }), /user-originated interactions only/);
+});
