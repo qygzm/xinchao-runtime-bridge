@@ -1,7 +1,7 @@
 {
   "name": "xinchao-runtime-bridge",
   "version": "0.2.0",
-  "description": "A fail-closed delivery bridge between Xinchao and user-owned AI runtimes.",
+  "description": "A fail-closed delivery bridge between Xinchao Nian and user-owned AI runtimes.",
   "type": "module",
   "license": "MIT",
   "bin": {
