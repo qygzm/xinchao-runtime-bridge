@@ -6,6 +6,8 @@ export const USER_INTERACTION_REASONS = Object.freeze([
   'user_interaction',
   'user_note',
   'scheduled_interaction',
+  // 用户在网页提交的问题反馈——同样由用户主动发起，允许注入窗口。
+  'user_feedback',
 ]);
 
 const DELIVERY_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{5,159}$/;
